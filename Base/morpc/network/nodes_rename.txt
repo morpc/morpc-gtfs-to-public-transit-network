@@ -1,0 +1,1 @@
+FILEI NODEI[1] = "C:\Diego Galdino\GTFS_To_Public_Transit_Network\Base\morpc\network\MOR18_nodes_wTransit.dbf", RENAME=GEOMETRYSO-GEOMETRYSOU

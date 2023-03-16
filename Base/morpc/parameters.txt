@@ -1,0 +1,23 @@
+### Enter your parameters below ###
+### Check the readme file for better instructions on what to type for each variable below ###
+day_type="monday"
+period_times={
+"AM":["06:00:00","09:00:00"],
+"MD":["09:00:00","15:00:00"],
+"PM":["15:00:00","19:00:00"],
+"NT":["19:00:00","24:00:00"],
+"EA":["04:30:00","06:00:00"]}
+modes_gtfs=[3]
+transit_only_attributes={"FACTYPE":65,"LINKGRP":22,"CSPEEDAM":15,"CSPEEDMD":15,"CSPEEDPM":15,"CSPEEDNT":15,"NOTE":"BUS"}
+factype_to_avoid=[70]
+nodes_ranges_to_avoid=[[0,0],[0,2500]]
+w_bffr=328
+i_bffr=16400
+net_proj="ESRI:102723"
+plot_bool=1
+gtfs_path="C:\\Diego Galdino\\GTFS_To_Public_Transit_Network\\inputs\\MORPC\\gtfs"
+net_folder="C:\\Diego Galdino\\GTFS_To_Public_Transit_Network\\inputs\\MORPC\\network"
+nodes_file="MOR18_nodes.shp"
+links_file="MOR18_links.shp"
+rte_mode_table="C:\\Diego Galdino\\GTFS_To_Public_Transit_Network\\inputs\\MORPC\\route-info\\modes_table.csv"
+scen_dir="C:\\Diego Galdino\\GTFS_To_Public_Transit_Network\\Base\\morpc"
