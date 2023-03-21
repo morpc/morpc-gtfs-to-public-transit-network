@@ -1,6 +1,6 @@
 # GTFS To Public Transit Network
 
-This tool is to create the Public Transit Network from GTFS files. It identifies the existing nodes and links in the given network and creates transit-only nodes and links to fill in the gaps. The transit-only links replicate exactly the shape of the route. The transit-only nodes are located as the projection of the missing bus stops to the route.
+This tool creates transit line file from GTFS files for Cube 6 models. It identifies the existing nodes and links in the given network and creates transit-only nodes and links to fill in the gaps. The transit-only links replicate exactly the shape of the route. The transit-only nodes are located as the projection of the missing bus stops to the route.
 
 Go to './BASE/morpc/images' for figures of the 2018 COTA route variations (i.e., shape IDs) like the one below.
 <p align="center">
