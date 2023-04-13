@@ -1,6 +1,6 @@
 # GTFS To Public Transit Network
 
-This tool is to create the Public Transit Network from GTFS files. It identifies the existing nodes and links in the given network and creates transit-only nodes and links to fill in the gaps. The transit-only links replicate exactly the shape of the route. The transit-only nodes are located as the projection of the missing bus stops to the route.
+This tool creates transit line file from GTFS for Cube 6 models. It identifies the existing nodes and links in the given network and creates transit-only nodes and links to fill in the gaps. The transit-only links replicate exactly the shape of the route. The transit-only nodes are located as the projection of the missing bus stops to the route.
 
 Go to './BASE/morpc/images' for figures of the 2018 COTA route variations (i.e., shape IDs) like the one below.
 <p align="center">
@@ -21,6 +21,9 @@ Go to './BASE/morpc/images' for figures of the 2018 COTA route variations (i.e.,
 ### GTFS
 Per <a href='https://gtfs.org/'>https://gtfs.org/</a>,
 <blockquote>"The General Transit Feed Specification (GTFS) is a data specification that allows public transit agencies to publish their transit data in a format that can be consumed by a wide variety of software applications."</blockquote>
+
+You can find GTFS feeds in <a href='https://database.mobilitydata.org/'>https://database.mobilitydata.org/</a>. Download their CSV spreadsheet and filter by city or agency to find the link to the GTFS that you are looking for.
+
 The GTFS files usually come zipped in one .zip file. Unzip all .txt files to './inputs/YOUR_PROJECT_FOLDER/gtfs'.
 
 ### Network
