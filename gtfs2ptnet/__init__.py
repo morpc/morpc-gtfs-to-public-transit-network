@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Created on Nov 2022.
+Tool development: Nov 2022 - Feb 2023.
 
-@author: Diego Galdino. Associate Engineer at MORPC.
+@author:        Diego Galdino, Associate Engineer with MORPC.
+@Contributions: Zhuojun Jiang, Transportation Engineer IV with ODOT.
+                Yan Liu, Senior Engineer with MORPC.
+                Raj Roy, Associate Engineer with MORPC.
 """
 
 import pandas as pd
@@ -61,14 +64,32 @@ def net_cleaning(nodes_df, links_df, nodes_ranges_to_avoid, factype_to_avoid):
 def read_gtfs(gtfs_folder, crs=None):
     gtfs_stops_df = pd.read_csv(os.path.join(gtfs_folder, 'stops.txt'))
     gtfs_stops_df = gpd.GeoDataFrame(gtfs_stops_df, geometry=gpd.points_from_xy(gtfs_stops_df.stop_lon, gtfs_stops_df.stop_lat), crs="EPSG:4326").to_crs(crs)
+    gtfs_stops_df = change_id_cols_type(gtfs_stops_df)
+    
     gtfs_shapes_df = pd.read_csv(os.path.join(gtfs_folder, 'shapes.txt'))
     gtfs_shapes_df = gpd.GeoDataFrame(gtfs_shapes_df, geometry=gpd.points_from_xy(gtfs_shapes_df.shape_pt_lon, gtfs_shapes_df.shape_pt_lat), crs="EPSG:4326").to_crs(crs)
+    gtfs_shapes_df = change_id_cols_type(gtfs_shapes_df)
+    
     gtfs_trips_df = pd.read_csv(os.path.join(gtfs_folder, 'trips.txt'))
+    gtfs_trips_df = change_id_cols_type(gtfs_trips_df)
+    
     gtfs_routes_df = pd.read_csv(os.path.join(gtfs_folder, 'routes.txt'))
+    gtfs_routes_df = change_id_cols_type(gtfs_routes_df)
+    
     gtfs_stop_times_df = pd.read_csv(os.path.join(gtfs_folder, 'stop_times.txt'))
     gtfs_stop_times_df['arrival_time'] = gtfs_stop_times_df.arrival_time.apply(lambda x: pd.to_datetime(x.strip()).strftime('%H:%M:%S') if int(x.strip().split(':')[0]) < 24 else pd.to_datetime(f"{int(x.strip().split(':')[0])-24}:{x.strip().split(':')[1]}:{x.strip().split(':')[2]}").strftime('%H:%M:%S'))
+    gtfs_stop_times_df = change_id_cols_type(gtfs_stop_times_df)
+    
     gtfs_calendar_df = pd.read_csv(os.path.join(gtfs_folder, 'calendar.txt'))
+    gtfs_calendar_df = change_id_cols_type(gtfs_calendar_df)
     return gtfs_stops_df, gtfs_shapes_df, gtfs_trips_df, gtfs_routes_df, gtfs_stop_times_df, gtfs_calendar_df
+
+def change_id_cols_type(df, type_to='object'):
+    df = df.copy()
+    for c in df.columns:
+        if 'id' in c:
+            df[c] = df[c].astype(type_to)
+    return df
 
 def read_route_mode_id(rte_mode_table, route_id):
     modes_df = pd.read_csv(rte_mode_table)
@@ -84,20 +105,24 @@ def find_nodes_within_shp(nodes, links, shapes):
 
 def nearest_node_to_stop(stop, nodes, threshold=np.inf):
     # stop is geometry and nodes is geodataframe
-    distances = np.array([stop.distance(n) for n in nodes.geometry])
-    if np.min(distances) <= threshold:
-        near_node = np.argmin(distances)
-        return nodes.N.to_list()[near_node]
-    else:
+    if nodes.shape[0] == 0:
         return None
+    else:
+        distances = np.array([stop.distance(n) for n in nodes.geometry])
+        if np.min(distances) <= threshold:
+            near_node = np.argmin(distances)
+            return nodes.N.to_list()[near_node]
+        else:
+            return None
 
 def match_stops_and_nodes(gtfs_stop_times_df, gtfs_stops_df, nodes_within_shp_df, route_trip_id, threshold=np.inf):
     line_stops = gpd.GeoDataFrame(gtfs_stop_times_df[gtfs_stop_times_df.trip_id == route_trip_id].merge(gtfs_stops_df[['stop_id','geometry']])).sort_values(by='stop_sequence')
     line_stops['N'] = line_stops.geometry.apply(lambda x: nearest_node_to_stop(x, nodes_within_shp_df, threshold))
+    line_stops['N'] = line_stops['N'].astype('object')
     return line_stops
 
 def match_stops_and_transit_nodes(line_stops, transit_only_nodes_df, gtfs_stop_times_df, gtfs_stops_df, nodes_within_shp_df, route_trip_id):
-    if transit_only_nodes_df.shape[0] != 0:
+    if transit_only_nodes_df.shape[0] != 0 and nodes_within_shp_df.shape[0] != 0:
         line_stops_transit_only = transit_only_nodes_df[transit_only_nodes_df.N.isin(nodes_within_shp_df.N.to_list())].copy()
         if line_stops_transit_only.shape[0] != 0: # Only transit-only nodes related to the current route
             line_stops_transit_only = match_stops_and_nodes(gtfs_stop_times_df, gtfs_stops_df, line_stops_transit_only, route_trip_id, 328)
@@ -318,9 +343,11 @@ def create_node_seq(G, line_stops, transit_only_nodes_df, transit_only_links_df,
     return line_node_seq, G, line_stops, transit_only_nodes_df, transit_only_links_df, new_nodes_from
 
 def create_node_and_link_seq_gdf(line_node_seq, line_stops, nodes_within_shp_df, links_within_shp_df, transit_only_nodes_df, transit_only_links_df):
-    nodes_within_shp_df = update_nodes_when_new_link(nodes_within_shp_df, transit_only_nodes_df[~transit_only_nodes_df.N.isin(nodes_within_shp_df.N.to_list())])
+    if transit_only_nodes_df.shape[0] != 0:
+        nodes_within_shp_df = update_nodes_when_new_link(nodes_within_shp_df, transit_only_nodes_df[~transit_only_nodes_df.N.isin(nodes_within_shp_df.N.to_list())])
     line_node_seq_df = gpd.GeoDataFrame(pd.DataFrame({'N':line_node_seq}).merge(pd.DataFrame(nodes_within_shp_df), how='left'))
-    links_within_shp_df = update_links_when_new_link(links_within_shp_df, transit_only_links_df[~transit_only_links_df.AB.isin(links_within_shp_df.AB.to_list())])
+    if transit_only_links_df.shape[0] != 0:
+        links_within_shp_df = update_links_when_new_link(links_within_shp_df, transit_only_links_df[~transit_only_links_df.AB.isin(links_within_shp_df.AB.to_list())])
     line_link_seq_df = gpd.GeoDataFrame(pd.DataFrame({'A':line_node_seq[:-1], 'B':line_node_seq[1:]}).merge(pd.DataFrame(links_within_shp_df), how='left'))
     
     # Set stop nodes to negative
@@ -331,11 +358,13 @@ def create_node_and_link_seq_gdf(line_node_seq, line_stops, nodes_within_shp_df,
 
 def update_nodes_links_with_transit_only(nodes_df, links_df, transit_only_nodes_df, transit_only_links_df):
     nodes_df, links_df, transit_only_nodes_df, transit_only_links_df = nodes_df.copy(), links_df.copy(), transit_only_nodes_df.copy(), transit_only_links_df.copy()
-    nodes_cols = transit_only_nodes_df.columns.to_list()
-    nodes_df = update_nodes_when_new_link(nodes_df, transit_only_nodes_df[~transit_only_nodes_df.N.isin(nodes_df.N.to_list())], nodes_cols)
-    links_df['AB'] = abs(links_df.A).astype('int').astype('str') + '_' + abs(links_df.B).astype('int').astype('str')
-    links_cols = transit_only_links_df.columns.to_list()
-    links_df = update_links_when_new_link(links_df, transit_only_links_df[~transit_only_links_df.AB.isin(links_df.AB.to_list())], links_cols)
+    if transit_only_nodes_df.shape[0] != 0:
+        nodes_cols = transit_only_nodes_df.columns.to_list()
+        nodes_df = update_nodes_when_new_link(nodes_df, transit_only_nodes_df[~transit_only_nodes_df.N.isin(nodes_df.N.to_list())], nodes_cols)
+    if transit_only_links_df.shape[0] != 0:
+        links_df['AB'] = abs(links_df.A).astype('int').astype('str') + '_' + abs(links_df.B).astype('int').astype('str')
+        links_cols = transit_only_links_df.columns.to_list()
+        links_df = update_links_when_new_link(links_df, transit_only_links_df[~transit_only_links_df.AB.isin(links_df.AB.to_list())], links_cols)
     return nodes_df, links_df
 
 def append_transit_only_nodes(transit_only_nodes_df, transit_only_nodes, transit_only_attributes):
@@ -353,23 +382,32 @@ def append_transit_only_links(transit_only_links_df, transit_only_links, transit
     return transit_only_links_df
 
 def plot(scen_dir, shp_id_df, gtfs_trips_df, line_node_seq_df, line_link_seq_df, links_intersecting_shp_df, transit_only_nodes_df, transit_only_links_df, w_bffr, i_bffr, title, figsize=(20,20)):
-    # Setting dataframes
-    shp_id_line_df = gpd.GeoDataFrame({'geometry':[LineString(shp_id_df.geometry.values)]})
-    line_link_seq_df['AB'] = abs(line_link_seq_df.A).astype('int').astype('str') + '_' +  abs(line_link_seq_df.B).astype('int').astype('str')
-    net_links = line_link_seq_df[~line_link_seq_df.AB.isin(transit_only_links_df.AB.to_list())].drop_duplicates(subset=['AB'])
-    created_links = line_link_seq_df[line_link_seq_df.AB.isin(transit_only_links_df.AB.to_list())].drop_duplicates(subset=['AB'])
-    net_nodes = line_node_seq_df[line_node_seq_df.N<0].drop_duplicates(subset=['N'])
-    net_stops = line_node_seq_df[(line_node_seq_df.N>0) & (~abs(line_node_seq_df.N).isin(transit_only_nodes_df.N.to_list()))].drop_duplicates(subset=['N'])
-    created_stops = line_node_seq_df[(line_node_seq_df.N>0) & (abs(line_node_seq_df.N).isin(transit_only_nodes_df.N.to_list()))].drop_duplicates(subset=['N'])
-    # Fig below
     fig, ax = plt.subplots(figsize=figsize)
+    
     links_intersecting_shp_df.plot(ax=ax, color='grey', linewidth=1, alpha=0.3, zorder=1, label=f'Highway links in a range of {i_bffr} ft (~{i_bffr/3281:.2f} km)')
+    
+    shp_id_line_df = gpd.GeoDataFrame({'geometry':[LineString(shp_id_df.geometry.values)]})
     shp_id_line_df.plot(ax=ax, color='green', linewidth=10, alpha=0.25, zorder=2, label="Line shape buffer.")
+    
+    line_link_seq_df['AB'] = abs(line_link_seq_df.A).astype('int').astype('str') + '_' +  abs(line_link_seq_df.B).astype('int').astype('str')
+    if transit_only_links_df.shape[0] != 0:
+        net_links = line_link_seq_df[~line_link_seq_df.AB.isin(transit_only_links_df.AB.to_list())].drop_duplicates(subset=['AB'])
+        created_links = line_link_seq_df[line_link_seq_df.AB.isin(transit_only_links_df.AB.to_list())].drop_duplicates(subset=['AB'])
+        created_links.plot(ax=ax, color='yellow', linestyle='dotted', linewidth=2, zorder=4, label="Transit-only links created.")
+    else:
+        net_links = line_link_seq_df.copy()
     net_links.plot(ax=ax, color='black', linestyle='solid', linewidth=2, zorder=3, label="Highway links already coded.")
-    created_links.plot(ax=ax, color='yellow', linestyle='dotted', linewidth=2, zorder=4, label="Transit-only links created.")
+    
+    net_nodes = line_node_seq_df[line_node_seq_df.N<0].drop_duplicates(subset=['N'])
     net_nodes.plot(ax=ax, color='blue', alpha=0.6, marker="s", markersize=25, zorder=4, label="Non-stop highway nodes already coded.")
+    
+    if transit_only_nodes_df.shape[0] != 0:
+        net_stops = line_node_seq_df[(line_node_seq_df.N>0) & (~abs(line_node_seq_df.N).isin(transit_only_nodes_df.N.to_list()))].drop_duplicates(subset=['N'])
+        created_stops = line_node_seq_df[(line_node_seq_df.N>0) & (abs(line_node_seq_df.N).isin(transit_only_nodes_df.N.to_list()))].drop_duplicates(subset=['N'])
+        created_stops.plot(ax=ax, color='magenta', alpha=0.6, marker="^", markersize=25, zorder=5, label="Transit-only stop nodes created.")
+    else:
+        net_stops = line_node_seq_df[(line_node_seq_df.N>0)].drop_duplicates(subset=['N'])
     net_stops.plot(ax=ax, color='red', alpha=0.6, marker="o", markersize=25, zorder=5, label="Stop highway nodes already coded.")
-    created_stops.plot(ax=ax, color='magenta', alpha=0.6, marker="^", markersize=25, zorder=5, label="Transit-only stop nodes created.")
     
     ax.set_xlabel('X', fontsize=16)
     ax.set_ylabel('Y', fontsize=16)
@@ -472,11 +510,10 @@ def write_links_dbf(links_df, links_dbf):
     
 def write_net_attributes_renaming_file(cols, outfile, dbf_filename, link_or_node):
     text = f"FILEI {link_or_node.upper()}I[1] = \"{dbf_filename}\""
+    cols = [c for c in cols if c != c[:10]]
     if len(cols) != 0:
         text += ", RENAME="
         for c in cols:
-            if len(c) > 10:
-                text += f"{c[:10]}-{c}, "
-        text = text[:-2]
+            text += f"{c[:10]}-{c}, "
     with open(outfile, 'w') as file:
         file.write(text)  

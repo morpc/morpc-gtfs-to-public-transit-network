@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Created on Nov 2022.
+Tool development: Nov 2022 - Feb 2023.
 
-@author: Diego Galdino. Associate Engineer at MORPC.
+@author:        Diego Galdino, Associate Engineer with MORPC.
+@Contributions: Zhuojun Jiang, Transportation Engineer IV with ODOT.
+                Yan Liu, Senior Engineer with MORPC.
+                Raj Roy, Associate Engineer with MORPC.
 """
 
 #%% Libraries and hard-coded inputs below
@@ -74,12 +77,18 @@ if __name__=='__main__':
     transit_only_links_df = pd.DataFrame()
     for shp_id in gtfs_shapes_df.shape_id.unique():
         t1 = time.time()
+        
         # Line/Route ID, mode, and first trip ID
+        if shp_id not in gtfs_trips_df.shape_id.tolist():
+            print(f"Shape ID {shp_id} not found in GTFS 'trips.txt'.")
+            continue
+        
         route_id = gtfs_trips_df.loc[gtfs_trips_df.shape_id == shp_id, 'route_id'].unique()[0]
         route_mode = gtfs_routes_df[gtfs_routes_df['route_id'] == route_id].route_type.values[0]
         route_trip_id = gtfs_trips_df.loc[gtfs_trips_df.shape_id == shp_id, 'trip_id'].unique()[0]
         
         if route_mode not in modes_gtfs: # If shp_id's mode not in the list of modes to be processed, move to next shp_id
+            print(f"Shape ID {shp_id} is a Route Mode {route_mode} not of interest.")    
             continue
         
         shp_id_headsign = gtfs_trips_df.loc[gtfs_trips_df.shape_id == shp_id,'trip_headsign'].values[0]
@@ -160,14 +169,14 @@ if __name__=='__main__':
     print('New nodes and links shapefiles saved.')
     
     # Write lin file
-    write_lin_file(lines, os.path.join(scen_dir,'transit-only','PTlines.lin'))  # ZJ, os.getcwd(),'outputs',
+    write_lin_file(lines, os.path.join(scen_dir,'transit-only','PTlines.lin'))
     print('PTLines.lin file saved.')
     
     # Save transit only nodes and links file (CSV and DBF)
     if transit_only_nodes_df.shape[0] != 0:
         nodes_cols = list(transit_only_nodes_df.columns)
         nodes_cols.remove('geometry')
-        nodes_csv = os.path.join(scen_dir,'transit-only','PTOnlyNodes.csv')  # ZJ, os.getcwd(),'outputs',
+        nodes_csv = os.path.join(scen_dir,'transit-only','PTOnlyNodes.csv')
         transit_only_nodes_df[nodes_cols].to_csv(nodes_csv, index=False)
         nodes_dbf = nodes_csv.replace('csv','dbf')
         write_nodes_dbf(transit_only_nodes_df[nodes_cols], nodes_dbf)
@@ -175,7 +184,7 @@ if __name__=='__main__':
     if transit_only_links_df.shape[0] != 0:
         links_cols = list(transit_only_links_df.columns)
         links_cols = [c for c in links_cols if c not in ['AB', 'geometry']]
-        links_csv = os.path.join(scen_dir,'transit-only','PTOnlyLinks.csv')  # ZJ, os.getcwd(),'outputs',
+        links_csv = os.path.join(scen_dir,'transit-only','PTOnlyLinks.csv')
         transit_only_links_df[links_cols].to_csv(links_csv, index=False)
         links_dbf = links_csv.replace('csv','dbf')
         write_links_dbf(transit_only_links_df[links_cols], links_dbf)

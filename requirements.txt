@@ -2,7 +2,7 @@ pandas==1.4.4
 Fiona==1.8.22
 Shapely==1.8.5.post1
 pyproj==3.4.0
-rtree==0.9.7
+rtree==0.9.3
 geopandas==0.12.1
 dbf==0.99.3
 matplotlib==3.5.2
