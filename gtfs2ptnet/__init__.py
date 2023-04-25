@@ -23,11 +23,13 @@ warnings.filterwarnings("ignore")
 import dbf
 
 def read_network_shp(net_folder, nodes_file, links_file, crs):
+    print('Reading Network Nodes...')
     nodes_df = gpd.read_file(os.path.join(net_folder, nodes_file))
     if nodes_df.crs == None:
         nodes_df.crs = crs
     else:
         nodes_df = nodes_df.to_crs(crs)
+    print('Reading Network Links...')
     links_df = gpd.read_file(os.path.join(net_folder, links_file))
     if links_df.crs == None:
         links_df.crs = crs
@@ -36,6 +38,7 @@ def read_network_shp(net_folder, nodes_file, links_file, crs):
     return nodes_df, links_df
 
 def write_network_csv_shp(scen_dir, nodes_df, links_df, nodes_file, links_file):
+    print('Writing Network...')
     net_folder = os.path.join(scen_dir, 'network')
     # write shp files
     nodes_df.to_file(os.path.join(net_folder, f"{nodes_file.replace('.shp','_wTransit.shp')}"))
@@ -62,6 +65,7 @@ def net_cleaning(nodes_df, links_df, nodes_ranges_to_avoid, factype_to_avoid):
     return nodes_df, links_df
 
 def read_gtfs(gtfs_folder, crs=None):
+    print('Reading GTFS...')
     gtfs_stops_df = pd.read_csv(os.path.join(gtfs_folder, 'stops.txt'))
     gtfs_stops_df = gpd.GeoDataFrame(gtfs_stops_df, geometry=gpd.points_from_xy(gtfs_stops_df.stop_lon, gtfs_stops_df.stop_lat), crs="EPSG:4326").to_crs(crs)
     gtfs_stops_df = change_id_cols_type(gtfs_stops_df)
@@ -77,18 +81,20 @@ def read_gtfs(gtfs_folder, crs=None):
     gtfs_routes_df = change_id_cols_type(gtfs_routes_df)
     
     gtfs_stop_times_df = pd.read_csv(os.path.join(gtfs_folder, 'stop_times.txt'))
-    gtfs_stop_times_df['arrival_time'] = gtfs_stop_times_df.arrival_time.apply(lambda x: pd.to_datetime(x.strip()).strftime('%H:%M:%S') if int(x.strip().split(':')[0]) < 24 else pd.to_datetime(f"{int(x.strip().split(':')[0])-24}:{x.strip().split(':')[1]}:{x.strip().split(':')[2]}").strftime('%H:%M:%S'))
+    gtfs_stop_times_df['arrival_time'] = pd.to_datetime('2022-10-03', format='%Y-%m-%d') + pd.to_timedelta(gtfs_stop_times_df.arrival_time.str.strip())
     gtfs_stop_times_df = change_id_cols_type(gtfs_stop_times_df)
     
     gtfs_calendar_df = pd.read_csv(os.path.join(gtfs_folder, 'calendar.txt'))
     gtfs_calendar_df = change_id_cols_type(gtfs_calendar_df)
     return gtfs_stops_df, gtfs_shapes_df, gtfs_trips_df, gtfs_routes_df, gtfs_stop_times_df, gtfs_calendar_df
 
-def change_id_cols_type(df, type_to='object'):
+def change_id_cols_type(df, type_to='str'):
     df = df.copy()
     for c in df.columns:
         if 'id' in c:
-            df[c] = df[c].astype(type_to)
+            df[c] = df[c].astype(type_to) # convert type to str (or other type specified)
+        if c == 'stop_id':
+            df[c] = df[c].apply(lambda x: x.lstrip('0')) # remove leading zeros
     return df
 
 def read_route_mode_id(rte_mode_table, route_id):
@@ -422,25 +428,38 @@ def valid_filename_alphanumeric_spaces(filename):
     return "".join(x for x in filename if x.isalnum() or x.isspace() or x == '.')
 
 def list_arrival_times_by_shp_service_time(gtfs_trips_df, gtfs_calendar_df, gtfs_stop_times_df, shp_id, day_type, period_time):
-    srvc_id = gtfs_calendar_df.loc[gtfs_calendar_df[day_type] == 1,'service_id'].values[0]
-    gtfs_trips_df = gtfs_trips_df.copy()
-    gtfs_stop_times_df = gtfs_stop_times_df.copy()
-    gtfs_trips_df = gtfs_trips_df.merge(gtfs_stop_times_df[gtfs_stop_times_df.stop_sequence == 1][['trip_id','arrival_time']])
-    arr_times_by_shp_srvc_time = dict()
     start_time, end_time = period_time
-    arr_times_by_shp_srvc_time = gtfs_trips_df[(gtfs_trips_df.shape_id == shp_id) & 
-                                        (gtfs_trips_df.service_id == srvc_id) & 
-                                        (gtfs_trips_df.arrival_time >= start_time) &
-                                        (gtfs_trips_df.arrival_time < end_time)].arrival_time.to_list()
-    return arr_times_by_shp_srvc_time
+    gtfs_calendar_df = gtfs_calendar_df.copy()
+    gtfs_calendar_df['start_date'] = pd.to_datetime(gtfs_calendar_df['start_date'], format='%Y%m%d')
+    gtfs_calendar_df['end_date'] = pd.to_datetime(gtfs_calendar_df['end_date'], format='%Y%m%d')
+    gtfs_calendar_df['total_days'] = (gtfs_calendar_df['end_date'] - gtfs_calendar_df['start_date']).dt.days # The service will be chosen based on the longest service that includes the day of interest (e.g., longest service including Monday)
+    srvc_id = gtfs_calendar_df.loc[(gtfs_calendar_df[day_type] == 1) & (gtfs_calendar_df['total_days'] == gtfs_calendar_df['total_days'].max()),'service_id'].values[0]
+    arr_times_by_shp_srvc_stop_time = dict()
+    route_trip_ids = list(gtfs_trips_df[gtfs_trips_df.shape_id == shp_id].trip_id.unique())
+    for stop in gtfs_stop_times_df[gtfs_stop_times_df.trip_id.isin(route_trip_ids)].stop_id.unique():
+        gtfs_srvc_time_df = gtfs_trips_df.merge(gtfs_stop_times_df[gtfs_stop_times_df.stop_id == stop][['trip_id','arrival_time']])
+        arr_times_by_shp_srvc_stop_time[stop] = gtfs_srvc_time_df[(gtfs_srvc_time_df.shape_id == shp_id) & 
+                                                                  (gtfs_srvc_time_df.service_id == srvc_id) & 
+                                                                  (gtfs_srvc_time_df.arrival_time.dt.strftime('%H:%M:%S') >= start_time) &
+                                                                  (gtfs_srvc_time_df.arrival_time.dt.strftime('%H:%M:%S') < end_time)].arrival_time.to_list()
+    return arr_times_by_shp_srvc_stop_time
 
-def calculate_headway(start_times):
-		start_times.sort()
-		headways = [(pd.to_datetime(t) - pd.to_datetime(s)).total_seconds() for s, t in zip(start_times, start_times[1:])]
-		if headways:
-			return round(sum(headways)/(len(headways)*60))
-		else:
-			return 0.0
+def calculate_headway(arr_times_by_shp_srvc_stop_time):
+    stop_headways = []
+    stop_headway_counts = []
+    for stop in arr_times_by_shp_srvc_stop_time:
+        start_times = arr_times_by_shp_srvc_stop_time[stop]
+        start_times.sort()
+        headways = [(pd.to_datetime(t) - pd.to_datetime(s)).total_seconds() for s, t in zip(start_times, start_times[1:])]
+        if headways:
+            stop_headways.append(round(sum(headways)/(len(headways)*60)))
+        else:
+            stop_headways.append(0.0)
+        stop_headway_counts.append(len(headways))
+    if np.sum(stop_headway_counts) > 0 :
+        return round(np.average(stop_headways, weights=stop_headway_counts),2)
+    else:
+        return 0.00
         
 def set_line_name(head_sign, shp_id):
     shp_id = str(shp_id)[-3:]
@@ -448,11 +467,7 @@ def set_line_name(head_sign, shp_id):
     return head_sign[:tot_len-len(shp_id)-1] + '_' + shp_id
 
 def write_lin_file(lines, outfile):
-#     header = ''';;<<PT>><<LINE>>;;
-# ; 2018 Local bus lines
-# ; LOCALBUS.LIN
-# ; MORPC Travel Forecasting Model
-# ; Local Bus Transit Lines'''
+    print('Writing Line file...')
     with open(outfile, 'w') as file:
         # file.write(header)
         for line in lines:
@@ -516,4 +531,4 @@ def write_net_attributes_renaming_file(cols, outfile, dbf_filename, link_or_node
         for c in cols:
             text += f"{c[:10]}-{c}, "
     with open(outfile, 'w') as file:
-        file.write(text)  
+        file.write(text)

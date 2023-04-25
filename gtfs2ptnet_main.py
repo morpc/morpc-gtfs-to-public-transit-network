@@ -104,6 +104,20 @@ if __name__=='__main__':
         line_name = set_line_name(head_sign, shp_id)
         line['name'] = line_name
         
+        # Calculate headways
+        line['headways'] = list()
+        for t in period_times:
+            period_time = period_times[t]
+            arr_times_by_shp_srvc_time = list_arrival_times_by_shp_service_time(gtfs_trips_df, gtfs_calendar_df, gtfs_stop_times_df, shp_id, day_type, period_time)
+            headway_by_shp_srvc_time = calculate_headway(arr_times_by_shp_srvc_time)
+            line['headways'].append(headway_by_shp_srvc_time)
+        
+        # Skip line if headways all zeros
+        if np.sum(line['headways'])==0:
+            print(f'\tLINE SKIPPED DUE TO HEADWAYS ALL ZEROS.')
+            print(f'\tShape ID {shp_id} processing done. Total time {time.time()-t1:.2f} seconds.')
+            continue
+        
         # Filter gtfs_shapes_df by shp_id and create the shape id line
         shp_id_df = gtfs_shapes_df[gtfs_shapes_df.shape_id == shp_id].copy().reset_index(drop=True)
         shp_id_line = LineString(shp_id_df.geometry.values)
@@ -144,13 +158,11 @@ if __name__=='__main__':
         # Update nodes and links for next routes
         nodes_df, links_df = update_nodes_links_with_transit_only(nodes_df, links_df, transit_only_nodes_df, transit_only_links_df)
         
-        # Calculate headways
-        line['headways'] = list()
-        for t in period_times:
-            period_time = period_times[t]
-            arr_times_by_shp_srvc_time = list_arrival_times_by_shp_service_time(gtfs_trips_df, gtfs_calendar_df, gtfs_stop_times_df, shp_id, day_type, period_time)
-            headway_by_shp_srvc_time = calculate_headway(arr_times_by_shp_srvc_time)
-            line['headways'].append(headway_by_shp_srvc_time)
+        # Skip line if no node sequence
+        if len(line["node_seq"]) == 0:
+            print(f'\tLINE SKIPPED DUE TO NO NODE SEQUENCE.')
+            print(f'\tShape ID {shp_id} processing done. Total time {time.time()-t1:.2f} seconds.')
+            continue
         
         # Append line to list of lines that will be saved later as PTlines.LIN
         lines.append(line)
