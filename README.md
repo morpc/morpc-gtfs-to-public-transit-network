@@ -21,7 +21,7 @@ Go to `./BASE/morpc/images` for figures of the 2018 COTA route variations (i.e.,
 	- [network](#network)
 	- [transit-only](#transit-only)
 	- [images](#images)
-- [Before running the script](#before-running-the-script)
+- [Before running the tool](#before-running-the-tool)
 	- [Installing Python (Anaconda)](#installing-python-anaconda)
 	- [Creating a virtual environment and installing requirements.txt](#creating-a-virtual-environment-and-installing-requirementstxt)
 - [Running the tool](#running-the-tool)
@@ -76,7 +76,7 @@ The file `modes_table_for_your_reference_only.csv` is just for your reference an
 
 Figures of the routes in the given network as the one shown above.
 
-## Before running the script
+## Before running the tool
 ### Installing Python (Anaconda)
 
 Per Wikipedia,
