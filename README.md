@@ -12,11 +12,11 @@ Go to `./BASE/morpc/images` for figures of the 2018 COTA route variations (i.e.,
 </p>
 
 # Contents
-- [Observations](#observations-of-the-current-version-Mar-16th-2023)
+- [Observations](#observations-of-the-current-version-mar-16th-2023)
 - [Inputs](#inputs)
   - [GTFS](#gtfs)
-	- [Network](#network)
-	- [Route Information](#route-information)
+  - [Network](#network)
+  - [Route Information](#route-information)
 - [Outputs](#outputs)
 	- [network](#network)
 	- [transit-only](#transit-only)
